@@ -253,8 +253,8 @@ def DTWOrderingTreeBuild(dtw_manifold_dist):
         ==================================================
     '''
     num_samples = np.shape(dtw_manifold_dist)[0]
+    # logger.warning(f"{num_samples}")
     _Z = linkage(squareform(dtw_manifold_dist), method='single', optimal_ordering=True)  # 使用 Ward 方式进行层次聚类
-    
     dtw_node_list = []
     for i in range(num_samples):
         dtw_node_list.append(DTW_TREE(i,i))
@@ -723,11 +723,14 @@ def OutlierDetection_Ver02(chData, weirdModel = None, mask_flag = False):
     data = np.log(ch_EIS)
 
     if weirdModel is None:
-        weirdModel = joblib.load("./weirdSVMmodel.pkl")
-    weird_mask = weirdCriterion(weirdModel, data[:,freq_list_weird])
+        # weirdModel = joblib.load("./weirdSVMmodel.pkl")
+        # weird_mask = weirdCriterion(weirdModel, data[:,freq_list_weird])
+        good_data = data[:,:]
+        weird_mask = np.zeros(data.shape[0]).astype(bool)
+    else:
+        weird_mask = weirdCriterion(weirdModel, data[:,freq_list_weird])
+        good_data = data[~weird_mask,:]
     
-
-    good_data = data[~weird_mask,:]
     good_data = good_data[:,freq_list_dtw]
 
     dtw_dist_value, dtw_dist_trace = DTWPairwase(good_data)

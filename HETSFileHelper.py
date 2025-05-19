@@ -78,6 +78,9 @@ def readChannel(chID, fileDict):
     '''
     chData = []
     for ssID in fileDict.keys():
+        if chID not in fileDict[ssID].keys():
+            logger.warning(f"Channel {chID} not found in session {ssID}")
+            return None
         _data   = np.loadtxt(fileDict[ssID][chID], delimiter=',')
         _freq   = _data[:,0]
         _Zreal  = _data[:,3]
