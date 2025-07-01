@@ -111,7 +111,7 @@ def GPDataLoader(x_train, y_train, x_eval, NORM_X_FLAG = True, NORM_Y_FLAG = Tru
     
     y_train = np.hstack((y_train[:,:,0], y_train[:,:,1]))
 
-    logger.info(f"\nx: {np.shape(x_train)} \ny: {np.shape(y_train)} \nx_pred{np.shape(x_eval)}")
+    logger.debug(f"\nx: {np.shape(x_train)} \ny: {np.shape(y_train)} \nx_pred{np.shape(x_eval)}")
 
     return x_train, y_train, x_eval, [Scaler_X, Scaler_Y_real, Scaler_Y_imag]
 
@@ -130,10 +130,10 @@ def GPDataExporter(x_train, y_train, x_eval, y_eval_mean, y_eval_var, ScalerSet,
             NORM_Y_FLAG: Normalization flag for y_train, default True
         Returen:
             x_train: deregularized x_train data
-            y_train: dederegularized y_train data
-            x_eval: dederegularized x_eval data
-            y_eval: dederegularized y_eval_mean
-            y_eval_err: dederegularized y_eval_var
+            y_train: deregularized y_train data
+            x_eval: deregularized x_eval data
+            y_eval: deregularized y_eval_mean
+            y_eval_err: deregularized y_eval_var
         ==================================================
     '''
     n_freq = np.shape(y_train)[1]//2 
@@ -167,7 +167,7 @@ def GPDataExporter(x_train, y_train, x_eval, y_eval_mean, y_eval_var, ScalerSet,
     y_eval = np.stack([y_eval_mean_real, y_eval_mean_imag], axis=2)
     y_eval_err = np.stack([y_eval_var_real, y_eval_var_imag], axis=2)
     
-    logger.info(f"\nx: {np.shape(x_train)} \ny: {np.shape(y_train)} \nx_pred{np.shape(x_eval)} \ny_pred{np.shape(y_eval)} \ny_pred{np.shape(y_eval_err)}")
+    logger.debug(f"\nx: {np.shape(x_train)} \ny: {np.shape(y_train)} \nx_pred{np.shape(x_eval)} \ny_pred{np.shape(y_eval)} \ny_pred{np.shape(y_eval_err)}")
 
     return x_train, y_train, x_eval, y_eval, y_eval_err
 
@@ -213,9 +213,11 @@ def EISGPTrain(x_train, y_train, x_eval, cluster_id, device, training_iter = 200
         num_tasks=num_tasks, rank = 0).to(device)
     model = EISGPModel(x_train, y_train, likelihood, num_tasks).to(device)
 
+
     # Find optimal model hyperparameters
     model.train()
     likelihood.train()
+
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)  # Includes GaussianLikelihood parameters
     mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
@@ -225,6 +227,7 @@ def EISGPTrain(x_train, y_train, x_eval, cluster_id, device, training_iter = 200
     length_inst     = []
     noise_inst      = []
     for i in range(training_iter):
+        
         optimizer.zero_grad()
         output = model(x_train)
         loss = -mll(output, y_train)
@@ -239,7 +242,7 @@ def EISGPTrain(x_train, y_train, x_eval, cluster_id, device, training_iter = 200
         noise_inst.append(poi_noise)
         length_inst.append(poi_length)
         if not (i+1)%100:
-            logger.info(f"C{cluster_id} - Iter {i+1}/{training_iter}\tLoss: {loss.item()}")
+            logger.debug(f"C{cluster_id} - Iter {i+1}/{training_iter}\tLoss: {loss.item()}")
             
     # logger.info("Model Training Finished.")
 
@@ -277,6 +280,7 @@ def PiecewiseGPR(x_day_full, chData, eis_seq, eis_cluster = None, SPEED_RATE = 1
     NORM_X_FLAG=True
     NORM_Y_FLAG=True
 
+
     x_train_full, y_train_full, x_eval_full,  n_clusters, train_mask_list, eval_mask_list, eis_cluster_eval = \
         piecewise_interp(x_day_full, chData, eis_seq, None, 
                      eis_cluster = eis_cluster, 
@@ -291,6 +295,7 @@ def PiecewiseGPR(x_day_full, chData, eis_seq, eis_cluster = None, SPEED_RATE = 1
 
     for i in range(n_clusters):
     # for i in [1]:
+        
 
         x_train = x_train_full[train_mask_list[i]]
         y_train = y_train_full[train_mask_list[i],:,:]
@@ -299,6 +304,7 @@ def PiecewiseGPR(x_day_full, chData, eis_seq, eis_cluster = None, SPEED_RATE = 1
         x_train, y_train, x_eval, ScalerSet = \
             GPDataLoader(x_train, y_train, x_eval, 
                 NORM_X_FLAG=NORM_X_FLAG, NORM_Y_FLAG=NORM_Y_FLAG)
+
 
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -313,6 +319,7 @@ def PiecewiseGPR(x_day_full, chData, eis_seq, eis_cluster = None, SPEED_RATE = 1
         y_eval_mean = y_eval_tensor.mean.cpu().numpy()
         y_eval_var = y_eval_tensor.variance.detach().cpu().numpy()
 
+        
 
         x_train, y_train, x_eval, y_eval, y_eval_err = \
                 GPDataExporter(x_train, y_train, x_eval, y_eval_mean, y_eval_var, ScalerSet,
@@ -321,6 +328,7 @@ def PiecewiseGPR(x_day_full, chData, eis_seq, eis_cluster = None, SPEED_RATE = 1
         y_eval_full[eval_mask_list[i],:,:] = y_eval
         y_eval_err_full[eval_mask_list[i],:,:] = y_eval_err
 
+        
 
     return x_train_full, y_train_full, x_eval_full, y_eval_full, y_eval_err_full, eis_cluster_eval
 
