@@ -715,7 +715,6 @@ def shortCriterion(freq, test_data, threshold = np.log(1e4)):
 # Overall
 ############################################
 def OutlierDetection_Ver02(chData, weirdModel = None, mask_flag = False):
-    
     freq_list_weird = np.linspace(0,np.shape(chData)[2]-1,101,dtype=int, endpoint=True)
     freq_list_dtw   = np.linspace(1000,np.shape(chData)[2]-1,101,dtype=int, endpoint=True)
 
@@ -732,7 +731,7 @@ def OutlierDetection_Ver02(chData, weirdModel = None, mask_flag = False):
         good_data = data[~weird_mask,:]
     
     good_data = good_data[:,freq_list_dtw]
-
+    # logger.error(f"data.shape: {good_data.shape}")
     dtw_dist_value, dtw_dist_trace = DTWPairwase(good_data)
     dtw_manifold_vec, dtw_manifold_dist = DTWManifoldGeneration(dtw_dist_value, dtw_dist_trace)
     dtw_node_list = DTWOrderingTreeBuild(dtw_manifold_dist)

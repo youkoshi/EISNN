@@ -1,20 +1,18 @@
-
-import os
-import sys 
-
-import torch
 import numpy as np
 from scipy.linalg import eig, svd, solve
 
-from loguru import logger
 
 import matplotlib.pyplot as plt
+
+
+
+
+
 
 def Loewner_Framework(f, Z, REALFLAG = True):
     '''==================================================
         Construct Loewner Pencel
         Parameter: 
-            w:          complex array of omega (w = j2*pi*f)
             f:          real array of frequency values
             Z:          complex array of impedance values (H = Z)
             REALFLAG:   boolean flag to indicate if the model should have real entries
@@ -97,7 +95,7 @@ def state_space_model(L, Ls, H_left, H_right):
 
     return Ek, Ak, Bk, Ck
 
-def DRT_Transform(Ek, Ak, Bk, Ck, REALFLAG = False, real_th = 1e3):
+def DRT_Transform(Ek, Ak, Bk, Ck, REALFLAG = True, real_th = 1e3):
     '''==================================================
         Transform state space model to DRT model
         Parameter: 
@@ -123,10 +121,10 @@ def DRT_Transform(Ek, Ak, Bk, Ck, REALFLAG = False, real_th = 1e3):
     # tau_i   = abs(-1/_pol) 
 
     if REALFLAG:
-        real_ratio = np.where(np.abs(tau_i.imag) < 1e-16, np.inf, np.abs(tau_i.real / tau_i.imag))
-        tau_i = tau_i[real_ratio > real_th]
-        R_i = R_i[real_ratio > real_th]
-        C_i = C_i[real_ratio > real_th]
+        real_ratio = np.where(np.abs(tau_i.imag) == 0, np.inf, np.abs(tau_i.real / (tau_i.imag+1e-20)))
+        tau_i = np.abs(tau_i[real_ratio > real_th])
+        R_i = np.abs(R_i[real_ratio > real_th])
+        C_i = np.abs(C_i[real_ratio > real_th])
 
 
     return R_i, C_i, tau_i
@@ -190,7 +188,7 @@ def DRT_singularity_analysis(f, Z, REALFLAG = True):
 
     return svd_L
 
-def DRT_Analysis(f, Z, REALFLAG = True):
+def DRT_Analysis_Single(f, Z, REALFLAG = True):
     '''==================================================
         DRT Analysis
         Parameter: 
@@ -213,6 +211,25 @@ def DRT_Analysis(f, Z, REALFLAG = True):
 
     return R_i, C_i, tau_i, H, res_ReZ, res_ImZ
     
+def DRT_Analysis_Batch(chData, REALFLAG = True):
+    '''==================================================
+        DRT Analysis for Batch Data
+        Parameter: 
+            chData:     list of tuples (f, Z) for each channel
+            REALFLAG:   boolean flag to indicate if the model should have real entries
+        Returen:
+            results:    list of tuples (R_i, C_i, tau_i, H, res_ReZ, res_ImZ) for each channel
+        ==================================================
+    '''
+    DRTdata = []
+    f = chData[0,0,:]
+    for i in range(chData.shape[0]):
+        _Z = chData[i,1,:] + 1j*chData[i,2,:]
+        R_i, C_i, tau_i, _, _, _ = DRT_Analysis_Single(f, _Z, REALFLAG)
+        DRTdata.append((np.array([R_i, C_i, tau_i])))
+    return DRTdata
+
+
 def DRT_Single_Plot(f, Z_plot, H_plot, R_plot, C_plot, tau_plot, res_ReZ_plot, res_ImZ_plot, svd_L_plot):
     '''==================================================
         Plot DRT Analysis Results
@@ -262,3 +279,84 @@ def DRT_Single_Plot(f, Z_plot, H_plot, R_plot, C_plot, tau_plot, res_ReZ_plot, r
     return fig
 
 
+def DRT_Plot_Batch(fig, DRTdata, chData):
+    _w = 0.1
+    _h = 0.1
+    axis = [0] * 5
+    axis[0] = fig.add_axes([0.0625,0.5,0.25,0.4])
+    axis[1] = fig.add_axes([0.375,0.5,0.25,0.4])
+    axis[2] = fig.add_axes([0.6875,0.5,0.25,0.4])
+    
+    axis[3] = fig.add_axes([0.0625,0.05,0.4,0.4])
+    axis[4] = fig.add_axes([0.5375,0.05,0.4,0.4])
+    # axis[3] = fig.add_axes([0.05,0.05,0.2,0.4])
+    # axis[4] = fig.add_axes([0.5,0.05,0.2,0.4])
+
+
+    cmap = plt.colormaps.get_cmap('rainbow_r')
+    for i in range(chData.shape[0]):
+        ch_eis = chData[i,:,:]
+        ch_drt = DRTdata[i]
+        _color = cmap(i/chData.shape[0])
+
+        axis[0].plot(ch_eis[1,:], -ch_eis[2,:], color = _color, linewidth=2)
+        axis[1].loglog(ch_eis[0,:], np.abs(ch_eis[1,:]+1j*ch_eis[2,:]), color = _color, linewidth=2)
+        axis[2].semilogx(ch_eis[0,:], np.rad2deg(np.angle(ch_eis[1,:]+1j*ch_eis[2,:])), color = _color, linewidth=2)
+
+        _ml, _sl, _bl = axis[3].stem(ch_drt[2,:], ch_drt[0,:], linefmt='-.', markerfmt='o', basefmt='-')
+        plt.setp(_ml, color=_color, linewidth=2)
+        plt.setp(_sl, color=_color, linewidth=2)
+        plt.setp(_bl, color=_color, alpha=0.5)
+
+        
+        _ml, _sl, _bl = axis[4].stem(ch_drt[2,:], ch_drt[1,:], linefmt='-.', markerfmt='o', basefmt='-')
+        plt.setp(_ml, color=_color, linewidth=2)
+        plt.setp(_sl, color=_color, linewidth=2)
+        plt.setp(_bl, color=_color, alpha=0.5)
+
+    axis[0].set_aspect('equal', adjustable='datalim')
+    axis[3].set_xscale('log')
+    axis[3].set_yscale('log')
+    axis[4].set_xscale('log')
+    axis[4].set_yscale('log')
+
+
+
+
+
+def DRT_Plot_Batch_3D(fig, DRTdata, chData):
+    axis = [0] * 5
+    axis[0] = fig.add_axes([0.0625,0.5,0.25,0.4])
+    axis[1] = fig.add_axes([0.375,0.5,0.25,0.4])
+    axis[2] = fig.add_axes([0.6875,0.5,0.25,0.4])
+    
+    axis[3] = fig.add_axes([0.0625,0.05,0.4,0.4], projection='3d')
+    axis[4] = fig.add_axes([0.5375,0.05,0.4,0.4], projection='3d')
+
+    z_offset = 0.2
+    cmap = plt.colormaps.get_cmap('rainbow_r')
+    for i in range(chData.shape[0]):
+        ch_eis = chData[i,:,:]
+        ch_drt = DRTdata[i]
+        _color = cmap(i/chData.shape[0])
+
+        axis[0].plot(ch_eis[1,:], -ch_eis[2,:], color = _color, linewidth=2)
+        axis[1].loglog(ch_eis[0,:], np.abs(ch_eis[1,:]+1j*ch_eis[2,:]), color = _color, linewidth=2)
+        axis[2].semilogx(ch_eis[0,:], np.rad2deg(np.angle(ch_eis[1,:]+1j*ch_eis[2,:])), color = _color, linewidth=2)
+
+        z = np.ones_like(ch_drt[2, :]) * i * z_offset
+        x = np.log10(ch_drt[2, :])  
+        y1 = np.log10(ch_drt[0, :])  # R_i
+        y2 = np.log10(ch_drt[1, :])  # C_i
+
+        # for xi, yi, zi in zip(x, y1, z):
+        #     axis[3].plot([xi, xi], [zi, zi], [0, yi], color=_color, linewidth=1.5)
+        # for xi, yi, zi in zip(x, y2, z):
+        #     axis[4].plot([xi, xi], [zi, zi], [0, yi], color=_color, linewidth=1.5)
+
+        axis[3].scatter(x, z, y1, color=_color, s=20)
+        axis[4].scatter(x, z, y2, color=_color, s=20)
+
+        
+
+    axis[0].set_aspect('equal', adjustable='datalim')
